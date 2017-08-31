@@ -97,6 +97,10 @@
 #include "common/linux/eintr_wrapper.h"
 #include "third_party/lss/linux_syscall_support.h"
 
+extern "C" int breakpad_getcontext(ucontext_t* ucp);
+
+#define getcontext(x)   breakpad_getcontext(x)
+
 #if defined(__ANDROID__)
 #include "linux/sched.h"
 #endif
@@ -476,7 +480,7 @@ bool ExceptionHandler::SimulateSignalDelivery(int sig) {
   // ExceptionHandler::HandleSignal().
   siginfo.si_code = SI_USER;
   siginfo.si_pid = getpid();
-  struct ucontext context;
+  struct ucontext context = {0};
   getcontext(&context);
   return HandleSignal(sig, &siginfo, &context);
 }

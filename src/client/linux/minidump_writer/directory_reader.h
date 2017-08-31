@@ -59,12 +59,12 @@ class DirectoryReader {
   // After calling this, one must call |PopEntry| otherwise you'll get the same
   // entry over and over.
   bool GetNextEntry(const char** name) {
-    struct kernel_dirent* const dent =
-      reinterpret_cast<kernel_dirent*>(buf_);
+    struct kernel_dirent64* const dent =
+      reinterpret_cast<kernel_dirent64*>(buf_);
 
     if (buf_used_ == 0) {
       // need to read more entries.
-      const int n = sys_getdents(fd_, dent, sizeof(buf_));
+      const int n = sys_getdents64(fd_, dent, sizeof(buf_));
       if (n < 0) {
         return false;
       } else if (n == 0) {
@@ -98,7 +98,7 @@ class DirectoryReader {
   const int fd_;
   bool hit_eof_;
   unsigned buf_used_;
-  uint8_t buf_[sizeof(struct kernel_dirent) + NAME_MAX + 1];
+  uint8_t buf_[sizeof(struct kernel_dirent64) + NAME_MAX + 1];
 };
 
 }  // namespace google_breakpad

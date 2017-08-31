@@ -34,7 +34,7 @@
 #include "common/stabs_reader.h"
 
 #include <assert.h>
-#include <stab.h>
+//#include <stab.h>
 #include <string.h>
 
 #include <string>

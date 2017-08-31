@@ -59,6 +59,15 @@
 #include <a.out.h>
 #endif
 
+#undef N_UNDF
+#define N_UNDF 0x0
+#define N_FUN 0x24
+#define N_SLINE 0x44
+#define N_SO 0x64
+#define N_LSYM 0x80
+#define N_BINCL 0x82
+#define N_SOL 0x84
+
 #include <string>
 #include <vector>
 

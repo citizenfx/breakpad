@@ -864,9 +864,9 @@ const char* ElfArchitecture(const typename ElfClass::Ehdr* elf_header) {
 // last slash, or the whole filename if there are no slashes.
 string BaseFileName(const string &filename) {
   // Lots of copies!  basename's behavior is less than ideal.
-  char* c_filename = strdup(filename.c_str());
-  string base = basename(c_filename);
-  free(c_filename);
+  const char *c_filename = filename.c_str();
+  const char *p = strrchr(c_filename, '/');
+  string base = p ? p+1 : c_filename;
   return base;
 }
 

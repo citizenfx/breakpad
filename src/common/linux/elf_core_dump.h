@@ -36,6 +36,7 @@
 #include <elf.h>
 #include <link.h>
 #include <stddef.h>
+#include <limits.h>
 
 #include "common/memory_range.h"
 
@@ -51,9 +52,9 @@ class ElfCoreDump {
   typedef ElfW(Phdr) Phdr;
   typedef ElfW(Word) Word;
   typedef ElfW(Addr) Addr;
-#if __WORDSIZE == 32
+#if ULONG_MAX == 0xffffffff
   static const int kClass = ELFCLASS32;
-#elif __WORDSIZE == 64
+#elif ULONG_MAX == 0xffffffffffffffff
   static const int kClass = ELFCLASS64;
 #else
 #error "Unsupported __WORDSIZE for ElfCoreDump."
