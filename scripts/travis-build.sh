@@ -24,7 +24,7 @@ setup_env() {
 # We also do it by hand because when we're throttled, the addon will exit
 # the build immediately and skip the main script!
 coverity_scan() {
-  if [ "${TRAVIS_JOB_NUMBER##*.}" != "1" ] || \
+  if [ "${COVERITY_SCAN}" != "true" ] || \
      [ -n "${TRAVIS_TAG}" ] || \
      [ "${TRAVIS_PULL_REQUEST}" = "true" ]
   then
@@ -43,7 +43,7 @@ coverity_scan() {
 
 # Do an in-tree build and make sure tests pass.
 build() {
-  ./configure
+  ./configure --with-tests-as-root
   make -j${JOBS} check VERBOSE=1
   make distclean
 }
@@ -52,7 +52,7 @@ build() {
 build_out_of_tree() {
   mkdir -p build/native
   pushd build/native >/dev/null
-  ../../configure
+  ../../configure --with-tests-as-root
   make -j${JOBS} distcheck VERBOSE=1
   popd >/dev/null
 }
