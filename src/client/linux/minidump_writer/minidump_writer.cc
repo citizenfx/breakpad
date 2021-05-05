@@ -47,6 +47,8 @@
 #include "client/linux/minidump_writer/minidump_writer.h"
 #include "client/minidump_file_writer-inl.h"
 
+static const char ElfMagic[] = { 0x7f, 'E', 'L', 'F', '\0' };
+
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -249,6 +251,11 @@ class MinidumpWriter {
       return false;
     dir.CopyIndex(dir_index++, &dirent);
 
+	dirent.stream_type = MD_LINUX_DSO_DEBUG;
+	if (!WriteDSODebugStream(&dirent))
+		NullifyDirectoryEntry(&dirent);
+	dir.CopyIndex(dir_index++, &dirent);
+
     if (!WriteMappings(&dirent))
       return false;
     dir.CopyIndex(dir_index++, &dirent);
@@ -300,11 +307,6 @@ class MinidumpWriter {
 
     dirent.stream_type = MD_LINUX_MAPS;
     if (!WriteProcFile(&dirent.location, GetCrashThread(), "maps"))
-      NullifyDirectoryEntry(&dirent);
-    dir.CopyIndex(dir_index++, &dirent);
-
-    dirent.stream_type = MD_LINUX_DSO_DEBUG;
-    if (!WriteDSODebugStream(&dirent))
       NullifyDirectoryEntry(&dirent);
     dir.CopyIndex(dir_index++, &dirent);
 
@@ -739,6 +741,71 @@ class MinidumpWriter {
     return true;
   }
 
+  bool ReadMemory(const void* addr, void* out, size_t outLen)
+  {
+      return dumper_->CopyFromProcess(out, GetCrashThread(), addr, outLen);
+  }
+
+  bool VisitModule(uint64_t baseAddress) {
+      ElfW(Ehdr) ehdr;
+      if (!ReadMemory((void*)baseAddress, &ehdr, sizeof(ehdr))) {
+          return false;
+      }
+      if (memcmp(ehdr.e_ident, ElfMagic, strlen(ElfMagic)) != 0) {
+          return false;
+      }
+      int phnum = ehdr.e_phnum;
+      if (ehdr.e_phoff == 0 || phnum <= 0) {
+          return false;
+      }
+
+      app_memory_list_.push_back({ (void*)baseAddress, sizeof(ehdr) });
+
+      ElfW(Phdr)* phdrAddr = reinterpret_cast<ElfW(Phdr)*>(baseAddress + ehdr.e_phoff);
+      return EnumerateProgramHeaders(phdrAddr, phnum, baseAddress);
+  }
+
+  bool EnumerateProgramHeaders(ElfW(Phdr)* phdrAddr, int phnum, uint64_t baseAddress)
+  {
+	  uint64_t loadbias = baseAddress;
+
+	  // Calculate the load bias from the PT_LOAD program headers
+	  for (int i = 0; i < phnum; i++)
+	  {
+		  ElfW(Phdr) ph;
+		  if (!ReadMemory(phdrAddr + i, &ph, sizeof(ph))) {
+			  return false;
+		  }
+		  if (ph.p_type == PT_LOAD && ph.p_offset == 0) {
+			  loadbias -= ph.p_vaddr;
+			  break;
+		  }
+	  }
+
+	  // Enumerate all the program headers
+	  for (int i = 0; i < phnum; i++)
+	  {
+		  ElfW(Phdr) ph;
+          app_memory_list_.push_back({ (void*)(phdrAddr + i), sizeof(ph) });
+		  if (!ReadMemory(phdrAddr + i, &ph, sizeof(ph))) {
+			  return false;
+		  }
+
+		  switch (ph.p_type)
+		  {
+		  case PT_DYNAMIC:
+		  case PT_NOTE:
+		  case PT_GNU_EH_FRAME:
+			  if (ph.p_vaddr != 0 && ph.p_memsz != 0) {
+                  app_memory_list_.push_back({ (void*)(loadbias + ph.p_vaddr), ph.p_memsz });
+			  }
+			  break;
+		  }
+	  }
+
+	  return true;
+  }
+
   bool WriteDSODebugStream(MDRawDirectory* dirent) {
     ElfW(Phdr)* phdr = reinterpret_cast<ElfW(Phdr)*>(dumper_->auxv()[AT_PHDR]);
     char* base;
@@ -851,6 +918,8 @@ class MinidumpWriter {
         entry.addr = map.l_addr;
         entry.ld = reinterpret_cast<uintptr_t>(map.l_ld);
         linkmap.CopyIndex(idx++, &entry);
+
+        VisitModule(map.l_addr);
       }
     }
 
@@ -1348,7 +1417,7 @@ class MinidumpWriter {
   const MappingList& mapping_list_;
   // Additional memory regions to be included in the dump,
   // provided by the caller.
-  const AppMemoryList& app_memory_list_;
+  AppMemoryList app_memory_list_;
   // If set, skip recording any threads that do not reference the
   // mapping containing principal_mapping_address_.
   bool skip_stacks_if_mapping_unreferenced_;
